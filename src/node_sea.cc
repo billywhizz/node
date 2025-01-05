@@ -12,6 +12,7 @@
 #include "node_union_bytes.h"
 #include "node_v8_platform-inl.h"
 #include "util-inl.h"
+#include <sys/mman.h>
 
 // The POSTJECT_SENTINEL_FUSE macro is a string of random characters selected by
 // the Node.js project that is present only once in the entire binary. It is
@@ -601,6 +602,27 @@ void GetAsset(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(ab);
 }
 
+void GetAssetAsMemoryFile(const FunctionCallbackInfo<Value>& args) {
+  CHECK_EQ(args.Length(), 1);
+  CHECK(args[0]->IsString());
+  Utf8Value key(args.GetIsolate(), args[0]);
+  SeaResource sea_resource = FindSingleExecutableResource();
+  if (sea_resource.assets.empty()) {
+    return;
+  }
+  auto it = sea_resource.assets.find(*key);
+  if (it == sea_resource.assets.end()) {
+    return;
+  }
+  int fd = memfd_create(*key, 0);
+  unsigned int written = write(fd, it->second.data(), it->second.size());
+  if (written != it->second.size()) {
+    close(fd);
+    return;    
+  }
+  args.GetReturnValue().Set(fd);
+}
+
 MaybeLocal<Value> LoadSingleExecutableApplication(
     const StartExecutionCallbackInfo& info) {
   // Here we are currently relying on the fact that in NodeMainInstance::Run(),
@@ -651,6 +673,7 @@ void Initialize(Local<Object> target,
             "isExperimentalSeaWarningNeeded",
             IsExperimentalSeaWarningNeeded);
   SetMethod(context, target, "getAsset", GetAsset);
+  SetMethod(context, target, "getAssetAsMemoryFile", GetAssetAsMemoryFile);
 }
 
 void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
