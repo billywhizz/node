@@ -1,0 +1,11 @@
+{
+    "main": "demo.js",
+    "output": "demo.blob",
+    "useSnapshot": false,
+    "useCodeCache": true,
+    "disableExperimentalSEAWarning": true,
+    "assets": {
+      "./build/Release/demo.node": "./build/Release/demo.node"
+    }
+  }
+  
