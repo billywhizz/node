@@ -78,7 +78,7 @@ void BuiltinLoader::GetNatives(Local<Name> property,
   Local<Object> out = Object::New(isolate);
   auto source = env->builtin_loader()->source_.read();
   for (auto const& x : *source) {
-    Local<String> key = OneByteString(isolate, x.first.c_str(), x.first.size());
+    Local<String> key = OneByteString(isolate, x.first);
     out->Set(context, key, x.second.ToStringChecked(isolate)).FromJust();
   }
   info.GetReturnValue().Set(out);
@@ -86,16 +86,6 @@ void BuiltinLoader::GetNatives(Local<Name> property,
 
 Local<String> BuiltinLoader::GetConfigString(Isolate* isolate) {
   return config_.ToStringChecked(isolate);
-}
-
-std::vector<std::string_view> BuiltinLoader::GetBuiltinIds() const {
-  std::vector<std::string_view> ids;
-  auto source = source_.read();
-  ids.reserve(source->size());
-  for (auto const& x : *source) {
-    ids.emplace_back(x.first);
-  }
-  return ids;
 }
 
 BuiltinLoader::BuiltinCategories BuiltinLoader::GetBuiltinCategories() const {
@@ -119,6 +109,9 @@ BuiltinLoader::BuiltinCategories BuiltinLoader::GetBuiltinCategories() const {
   builtin_categories.cannot_be_required = std::set<std::string> {
 #if !HAVE_INSPECTOR
     "inspector", "inspector/promises", "internal/util/inspector",
+        "internal/inspector/network", "internal/inspector/network_http",
+        "internal/inspector/network_undici", "internal/inspector_async_hook",
+        "internal/inspector_network_tracking",
 #endif  // !HAVE_INSPECTOR
 
 #if !NODE_USE_V8_PLATFORM || !defined(NODE_HAVE_I18N_SUPPORT)
@@ -136,6 +129,7 @@ BuiltinLoader::BuiltinCategories BuiltinLoader::GetBuiltinCategories() const {
         "internal/quic/quic", "internal/quic/symbols", "internal/quic/stats",
         "internal/quic/state",
 #endif             // !NODE_OPENSSL_HAS_QUIC
+        "quic",    // Experimental.
         "sqlite",  // Experimental.
         "sys",     // Deprecated.
         "wasi",    // Experimental.
@@ -204,7 +198,7 @@ MaybeLocal<String> BuiltinLoader::LoadBuiltinSource(Isolate* isolate,
                                     uv_err_name(r),
                                     uv_strerror(r),
                                     filename);
-    Local<String> message = OneByteString(isolate, buf.c_str());
+    Local<String> message = OneByteString(isolate, buf);
     isolate->ThrowException(v8::Exception::Error(message));
     return MaybeLocal<String>();
   }
@@ -274,8 +268,7 @@ MaybeLocal<Function> BuiltinLoader::LookupAndCompileInternal(
   }
 
   std::string filename_s = std::string("node:") + id;
-  Local<String> filename =
-      OneByteString(isolate, filename_s.c_str(), filename_s.size());
+  Local<String> filename = OneByteString(isolate, filename_s);
   ScriptOrigin origin(filename, 0, 0, true);
 
   BuiltinCodeCacheData cached_data{};
@@ -512,26 +505,25 @@ bool BuiltinLoader::CompileAllBuiltinsAndCopyCodeCache(
     Local<Context> context,
     const std::vector<std::string>& eager_builtins,
     std::vector<CodeCacheInfo>* out) {
-  std::vector<std::string_view> ids = GetBuiltinIds();
+  auto ids = GetBuiltinIds();
   bool all_succeeded = true;
-  std::string v8_tools_prefix = "internal/deps/v8/tools/";
-  std::string primordial_prefix = "internal/per_context/";
-  std::string bootstrap_prefix = "internal/bootstrap/";
-  std::string main_prefix = "internal/main/";
-  to_eager_compile_ = std::unordered_set<std::string>(eager_builtins.begin(),
-                                                      eager_builtins.end());
+  constexpr std::string_view v8_tools_prefix = "internal/deps/v8/tools/";
+  constexpr std::string_view primordial_prefix = "internal/per_context/";
+  constexpr std::string_view bootstrap_prefix = "internal/bootstrap/";
+  constexpr std::string_view main_prefix = "internal/main/";
+  to_eager_compile_ =
+      std::unordered_set(eager_builtins.begin(), eager_builtins.end());
 
   for (const auto& id : ids) {
-    if (id.compare(0, v8_tools_prefix.size(), v8_tools_prefix) == 0) {
+    if (id.starts_with(v8_tools_prefix)) {
       // No need to generate code cache for v8 scripts.
       continue;
     }
 
     // Eagerly compile primordials/boostrap/main scripts during code cache
     // generation.
-    if (id.compare(0, primordial_prefix.size(), primordial_prefix) == 0 ||
-        id.compare(0, bootstrap_prefix.size(), bootstrap_prefix) == 0 ||
-        id.compare(0, main_prefix.size(), main_prefix) == 0) {
+    if (id.starts_with(primordial_prefix) || id.starts_with(bootstrap_prefix) ||
+        id.starts_with(main_prefix)) {
       to_eager_compile_.emplace(id);
     }
 
@@ -551,8 +543,8 @@ bool BuiltinLoader::CompileAllBuiltinsAndCopyCodeCache(
   }
 
   RwLock::ScopedReadLock lock(code_cache_->mutex);
-  for (auto const& item : code_cache_->map) {
-    out->push_back({item.first, item.second});
+  for (const auto& [id, data] : code_cache_->map) {
+    out->push_back({id, data});
   }
   return all_succeeded;
 }
@@ -561,8 +553,8 @@ void BuiltinLoader::RefreshCodeCache(const std::vector<CodeCacheInfo>& in) {
   RwLock::ScopedLock lock(code_cache_->mutex);
   code_cache_->map.reserve(in.size());
   DCHECK(code_cache_->map.empty());
-  for (auto const& item : in) {
-    auto result = code_cache_->map.emplace(item.id, item.data);
+  for (auto const& [id, data] : in) {
+    auto result = code_cache_->map.emplace(id, data);
     USE(result.second);
     DCHECK(result.second);
   }
@@ -592,7 +584,7 @@ void BuiltinLoader::GetBuiltinCategories(
     return;
   if (result
           ->Set(context,
-                OneByteString(isolate, "cannotBeRequired"),
+                FIXED_ONE_BYTE_STRING(isolate, "cannotBeRequired"),
                 cannot_be_required_js)
           .IsNothing())
     return;
@@ -601,7 +593,7 @@ void BuiltinLoader::GetBuiltinCategories(
     return;
   if (result
           ->Set(context,
-                OneByteString(isolate, "canBeRequired"),
+                FIXED_ONE_BYTE_STRING(isolate, "canBeRequired"),
                 can_be_required_js)
           .IsNothing()) {
     return;
@@ -624,7 +616,7 @@ void BuiltinLoader::GetCacheUsage(const FunctionCallbackInfo<Value>& args) {
   }
   if (result
           ->Set(context,
-                OneByteString(isolate, "compiledWithCache"),
+                FIXED_ONE_BYTE_STRING(isolate, "compiledWithCache"),
                 builtins_with_cache_js)
           .IsNothing()) {
     return;
@@ -636,7 +628,7 @@ void BuiltinLoader::GetCacheUsage(const FunctionCallbackInfo<Value>& args) {
   }
   if (result
           ->Set(context,
-                OneByteString(isolate, "compiledWithoutCache"),
+                FIXED_ONE_BYTE_STRING(isolate, "compiledWithoutCache"),
                 builtins_without_cache_js)
           .IsNothing()) {
     return;
@@ -648,7 +640,7 @@ void BuiltinLoader::GetCacheUsage(const FunctionCallbackInfo<Value>& args) {
   }
   if (result
           ->Set(context,
-                OneByteString(isolate, "compiledInSnapshot"),
+                FIXED_ONE_BYTE_STRING(isolate, "compiledInSnapshot"),
                 builtins_in_snapshot_js)
           .IsNothing()) {
     return;
@@ -662,7 +654,7 @@ void BuiltinLoader::BuiltinIdsGetter(Local<Name> property,
   Environment* env = Environment::GetCurrent(info);
   Isolate* isolate = env->isolate();
 
-  std::vector<std::string_view> ids = env->builtin_loader()->GetBuiltinIds();
+  auto ids = env->builtin_loader()->GetBuiltinIds();
   info.GetReturnValue().Set(
       ToV8Value(isolate->GetCurrentContext(), ids).ToLocalChecked());
 }

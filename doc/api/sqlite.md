@@ -127,7 +127,9 @@ open. This method is a wrapper around [`sqlite3_close_v2()`][].
 ### `database.loadExtension(path)`
 
 <!-- YAML
-added: v23.5.0
+added:
+  - v23.5.0
+  - v22.13.0
 -->
 
 * `path` {string} The path to the shared library to load.
@@ -139,7 +141,9 @@ around [`sqlite3_load_extension()`][]. It is required to enable the
 ### `database.enableLoadExtension(allow)`
 
 <!-- YAML
-added: v23.5.0
+added:
+  - v23.5.0
+  - v22.13.0
 -->
 
 * `allow` {boolean} Whether to allow loading extensions.
@@ -163,7 +167,9 @@ file. This method is a wrapper around [`sqlite3_exec()`][].
 ### `database.function(name[, options], function)`
 
 <!-- YAML
-added: v23.5.0
+added:
+  - v23.5.0
+  - v22.13.0
 -->
 
 * `name` {string} The name of the SQLite function to create.
@@ -176,11 +182,14 @@ added: v23.5.0
   * `useBigIntArguments` {boolean} If `true`, integer arguments to `function`
     are converted to `BigInt`s. If `false`, integer arguments are passed as
     JavaScript numbers. **Default:** `false`.
-  * `varargs` {boolean} If `true`, `function` can accept a variable number of
-    arguments. If `false`, `function` must be invoked with exactly
-    `function.length` arguments. **Default:** `false`.
+  * `varargs` {boolean} If `true`, `function` may be invoked with any number of
+    arguments (between zero and [`SQLITE_MAX_FUNCTION_ARG`][]). If `false`,
+    `function` must be invoked with exactly `function.length` arguments.
+    **Default:** `false`.
 * `function` {Function} The JavaScript function to call when the SQLite
-  function is invoked.
+  function is invoked. The return value of this function should be a valid
+  SQLite data type: see [Type conversion between JavaScript and SQLite][].
+  The result defaults to `NULL` if the return value is `undefined`.
 
 This method is used to create SQLite user-defined functions. This method is a
 wrapper around [`sqlite3_create_function_v2()`][].
@@ -339,11 +348,17 @@ over hand-crafted SQL strings when handling user input.
 
 <!-- YAML
 added: v22.5.0
+changes:
+  - version:
+    - v23.7.0
+    - v22.14.0
+    pr-url: https://github.com/nodejs/node/pull/56385
+    description: Add support for `DataView` and typed array objects for `anonymousParameters`.
 -->
 
 * `namedParameters` {Object} An optional object used to bind named parameters.
   The keys of this object are used to configure the mapping.
-* `...anonymousParameters` {null|number|bigint|string|Buffer|Uint8Array} Zero or
+* `...anonymousParameters` {null|number|bigint|string|Buffer|TypedArray|DataView} Zero or
   more values to bind to anonymous parameters.
 * Returns: {Array} An array of objects. Each object corresponds to a row
   returned by executing the prepared statement. The keys and values of each
@@ -371,11 +386,17 @@ execution of this prepared statement. This property is a wrapper around
 
 <!-- YAML
 added: v22.5.0
+changes:
+  - version:
+    - v23.7.0
+    - v22.14.0
+    pr-url: https://github.com/nodejs/node/pull/56385
+    description: Add support for `DataView` and typed array objects for `anonymousParameters`.
 -->
 
 * `namedParameters` {Object} An optional object used to bind named parameters.
   The keys of this object are used to configure the mapping.
-* `...anonymousParameters` {null|number|bigint|string|Buffer|Uint8Array} Zero or
+* `...anonymousParameters` {null|number|bigint|string|Buffer|TypedArray|DataView} Zero or
   more values to bind to anonymous parameters.
 * Returns: {Object|undefined} An object corresponding to the first row returned
   by executing the prepared statement. The keys and values of the object
@@ -390,12 +411,20 @@ values in `namedParameters` and `anonymousParameters`.
 ### `statement.iterate([namedParameters][, ...anonymousParameters])`
 
 <!-- YAML
-added: v23.4.0
+added:
+  - v23.4.0
+  - v22.13.0
+changes:
+  - version:
+    - v23.7.0
+    - v22.14.0
+    pr-url: https://github.com/nodejs/node/pull/56385
+    description: Add support for `DataView` and typed array objects for `anonymousParameters`.
 -->
 
 * `namedParameters` {Object} An optional object used to bind named parameters.
   The keys of this object are used to configure the mapping.
-* `...anonymousParameters` {null|number|bigint|string|Buffer|Uint8Array} Zero or
+* `...anonymousParameters` {null|number|bigint|string|Buffer|TypedArray|DataView} Zero or
   more values to bind to anonymous parameters.
 * Returns: {Iterator} An iterable iterator of objects. Each object corresponds to a row
   returned by executing the prepared statement. The keys and values of each
@@ -410,11 +439,17 @@ the values in `namedParameters` and `anonymousParameters`.
 
 <!-- YAML
 added: v22.5.0
+changes:
+  - version:
+    - v23.7.0
+    - v22.14.0
+    pr-url: https://github.com/nodejs/node/pull/56385
+    description: Add support for `DataView` and typed array objects for `anonymousParameters`.
 -->
 
 * `namedParameters` {Object} An optional object used to bind named parameters.
   The keys of this object are used to configure the mapping.
-* `...anonymousParameters` {null|number|bigint|string|Buffer|Uint8Array} Zero or
+* `...anonymousParameters` {null|number|bigint|string|Buffer|TypedArray|DataView} Zero or
   more values to bind to anonymous parameters.
 * Returns: {Object}
   * `changes`: {number|bigint} The number of rows modified, inserted, or deleted
@@ -491,18 +526,77 @@ more data types than SQLite, only a subset of JavaScript types are supported.
 Attempting to write an unsupported data type to SQLite will result in an
 exception.
 
-| SQLite    | JavaScript           |
-| --------- | -------------------- |
-| `NULL`    | {null}               |
-| `INTEGER` | {number} or {bigint} |
-| `REAL`    | {number}             |
-| `TEXT`    | {string}             |
-| `BLOB`    | {Uint8Array}         |
+| SQLite    | JavaScript                 |
+| --------- | -------------------------- |
+| `NULL`    | {null}                     |
+| `INTEGER` | {number} or {bigint}       |
+| `REAL`    | {number}                   |
+| `TEXT`    | {string}                   |
+| `BLOB`    | {TypedArray} or {DataView} |
+
+## `sqlite.backup(sourceDb, destination[, options])`
+
+<!-- YAML
+added: v23.8.0
+-->
+
+* `sourceDb` {DatabaseSync} The database to backup. The source database must be open.
+* `destination` {string} The path where the backup will be created. If the file already exists, the contents will be
+  overwritten.
+* `options` {Object} Optional configuration for the backup. The
+  following properties are supported:
+  * `source` {string} Name of the source database. This can be `'main'` (the default primary database) or any other
+    database that have been added with [`ATTACH DATABASE`][] **Default:** `'main'`.
+  * `target` {string} Name of the target database. This can be `'main'` (the default primary database) or any other
+    database that have been added with [`ATTACH DATABASE`][] **Default:** `'main'`.
+  * `rate` {number} Number of pages to be transmitted in each batch of the backup. **Default:** `100`.
+  * `progress` {Function} Callback function that will be called with the number of pages copied and the total number of
+    pages.
+* Returns: {Promise} A promise that resolves when the backup is completed and rejects if an error occurs.
+
+This method makes a database backup. This method abstracts the [`sqlite3_backup_init()`][], [`sqlite3_backup_step()`][]
+and [`sqlite3_backup_finish()`][] functions.
+
+The backed-up database can be used normally during the backup process. Mutations coming from the same connection - same
+{DatabaseSync} - object will be reflected in the backup right away. However, mutations from other connections will cause
+the backup process to restart.
+
+```cjs
+const { backup, DatabaseSync } = require('node:sqlite');
+
+(async () => {
+  const sourceDb = new DatabaseSync('source.db');
+  const totalPagesTransferred = await backup(sourceDb, 'backup.db', {
+    rate: 1, // Copy one page at a time.
+    progress: ({ totalPages, remainingPages }) => {
+      console.log('Backup in progress', { totalPages, remainingPages });
+    },
+  });
+
+  console.log('Backup completed', totalPagesTransferred);
+})();
+```
+
+```mjs
+import { backup, DatabaseSync } from 'node:sqlite';
+
+const sourceDb = new DatabaseSync('source.db');
+const totalPagesTransferred = await backup(sourceDb, 'backup.db', {
+  rate: 1, // Copy one page at a time.
+  progress: ({ totalPages, remainingPages }) => {
+    console.log('Backup in progress', { totalPages, remainingPages });
+  },
+});
+
+console.log('Backup completed', totalPagesTransferred);
+```
 
 ## `sqlite.constants`
 
 <!-- YAML
-added: v23.5.0
+added:
+  - v23.5.0
+  - v22.13.0
 -->
 
 * {Object}
@@ -573,11 +667,16 @@ resolution handler passed to [`database.applyChangeset()`][]. See also
 [Constants Passed To The Conflict Handler]: https://www.sqlite.org/session/c_changeset_conflict.html
 [Constants Returned From The Conflict Handler]: https://www.sqlite.org/session/c_changeset_abort.html
 [SQL injection]: https://en.wikipedia.org/wiki/SQL_injection
+[Type conversion between JavaScript and SQLite]: #type-conversion-between-javascript-and-sqlite
 [`ATTACH DATABASE`]: https://www.sqlite.org/lang_attach.html
 [`PRAGMA foreign_keys`]: https://www.sqlite.org/pragma.html#pragma_foreign_keys
 [`SQLITE_DETERMINISTIC`]: https://www.sqlite.org/c3ref/c_deterministic.html
 [`SQLITE_DIRECTONLY`]: https://www.sqlite.org/c3ref/c_deterministic.html
+[`SQLITE_MAX_FUNCTION_ARG`]: https://www.sqlite.org/limits.html#max_function_arg
 [`database.applyChangeset()`]: #databaseapplychangesetchangeset-options
+[`sqlite3_backup_finish()`]: https://www.sqlite.org/c3ref/backup_finish.html#sqlite3backupfinish
+[`sqlite3_backup_init()`]: https://www.sqlite.org/c3ref/backup_finish.html#sqlite3backupinit
+[`sqlite3_backup_step()`]: https://www.sqlite.org/c3ref/backup_finish.html#sqlite3backupstep
 [`sqlite3_changes64()`]: https://www.sqlite.org/c3ref/changes.html
 [`sqlite3_close_v2()`]: https://www.sqlite.org/c3ref/close.html
 [`sqlite3_create_function_v2()`]: https://www.sqlite.org/c3ref/create_function.html

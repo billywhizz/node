@@ -2065,28 +2065,34 @@ method.
 
 <!-- YAML
 changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/56966
+    description: End-of-Life.
   - version: v10.0.0
     pr-url: https://github.com/nodejs/node/pull/18066
     description: Runtime deprecation.
 -->
 
-Type: Runtime
+Type: End-of-Life
 
-`timers.enroll()` is deprecated. Please use the publicly documented
+`timers.enroll()` has been removed. Please use the publicly documented
 [`setTimeout()`][] or [`setInterval()`][] instead.
 
 ### DEP0096: `timers.unenroll()`
 
 <!-- YAML
 changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/56966
+    description: End-of-Life.
   - version: v10.0.0
     pr-url: https://github.com/nodejs/node/pull/18066
     description: Runtime deprecation.
 -->
 
-Type: Runtime
+Type: End-of-Life
 
-`timers.unenroll()` is deprecated. Please use the publicly documented
+`timers.unenroll()` has been removed. Please use the publicly documented
 [`clearTimeout()`][] or [`clearInterval()`][] instead.
 
 ### DEP0097: `MakeCallback` with `domain` property
@@ -2613,14 +2619,17 @@ The `node:_stream_wrap` module is deprecated.
 
 <!-- YAML
 changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/56966
+    description: End-of-Life.
   - version: v11.14.0
     pr-url: https://github.com/nodejs/node/pull/26760
     description: Runtime deprecation.
 -->
 
-Type: Runtime
+Type: End-of-Life
 
-The previously undocumented `timers.active()` is deprecated.
+The previously undocumented `timers.active()` has been removed.
 Please use the publicly documented [`timeout.refresh()`][] instead.
 If re-referencing the timeout is necessary, [`timeout.ref()`][] can be used
 with no performance impact since Node.js 10.
@@ -2629,14 +2638,17 @@ with no performance impact since Node.js 10.
 
 <!-- YAML
 changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/56966
+    description: End-of-Life.
   - version: v11.14.0
     pr-url: https://github.com/nodejs/node/pull/26760
     description: Runtime deprecation.
 -->
 
-Type: Runtime
+Type: End-of-Life
 
-The previously undocumented and "private" `timers._unrefActive()` is deprecated.
+The previously undocumented and "private" `timers._unrefActive()` has been removed.
 Please use the publicly documented [`timeout.refresh()`][] instead.
 If unreferencing the timeout is necessary, [`timeout.unref()`][] can be used
 with no performance impact since Node.js 10.
@@ -3779,12 +3791,17 @@ It is recommended to use the `new` qualifier instead. This applies to all REPL c
 
 <!-- YAML
 changes:
-  - version: v23.4.0
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/55753
+    description: Runtime deprecation.
+  - version:
+    - v23.4.0
+    - v22.13.0
     pr-url: https://github.com/nodejs/node/pull/55892
     description: Documentation-only.
 -->
 
-Type: Documentation-only
+Type: Runtime
 
 Passing non-supported argument types is deprecated and, instead of returning `false`,
 will throw an error in a future version.
@@ -3793,7 +3810,9 @@ will throw an error in a future version.
 
 <!-- YAML
 changes:
-  - version: v23.4.0
+  - version:
+    - v23.4.0
+    - v22.13.0
     pr-url: https://github.com/nodejs/node/pull/55545
     description: Documentation-only deprecation.
 -->
@@ -3806,7 +3825,9 @@ These properties are unconditionally `true`. Any checks based on these propertie
 
 <!-- YAML
 changes:
-  - version: v23.4.0
+  - version:
+    - v23.4.0
+    - v22.13.0
     pr-url: https://github.com/nodejs/node/pull/55545
     description: Documentation-only deprecation.
 -->
