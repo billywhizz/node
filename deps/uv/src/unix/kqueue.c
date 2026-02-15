@@ -97,7 +97,7 @@ int uv__io_fork(uv_loop_t* loop) {
 
 
 int uv__io_check_fd(uv_loop_t* loop, int fd) {
-  struct kevent ev[2];
+  struct kevent64_s ev[2];
   struct stat sb;
 #ifdef __APPLE__
   char path[MAXPATHLEN];
@@ -132,21 +132,21 @@ int uv__io_check_fd(uv_loop_t* loop, int fd) {
   }
 #endif
 
-  EV_SET(ev, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
-  EV_SET(ev + 1, fd, EVFILT_READ, EV_DELETE, 0, 0, 0);
-  if (kevent(loop->backend_fd, ev, 2, NULL, 0, NULL))
+  EV_SET64(ev, fd, EVFILT_READ, EV_ADD, 0, 0, 0, 0, 0);
+  EV_SET64(ev + 1, fd, EVFILT_READ, EV_DELETE, 0, 0, 0, 0, 0);
+  if (kevent64(loop->backend_fd, ev, 2, NULL, 0, 0, NULL))
     return UV__ERR(errno);
 
   return 0;
 }
 
 
-static void uv__kqueue_delete(int kqfd, const struct kevent *ev) {
-  struct kevent change;
+static void uv__kqueue_delete(int kqfd, const struct kevent64_s *ev) {
+  struct kevent64_s change;
 
-  EV_SET(&change, ev->ident, ev->filter, EV_DELETE, 0, 0, 0);
+  EV_SET64(&change, ev->ident, ev->filter, EV_DELETE, 0, 0, 0, 0, 0);
 
-  if (0 == kevent(kqfd, &change, 1, NULL, 0, NULL))
+  if (0 == kevent64(kqfd, &change, 1, NULL, 0, 0, NULL))
     return;
 
   if (errno == EBADF || errno == ENOENT)
@@ -155,11 +155,10 @@ static void uv__kqueue_delete(int kqfd, const struct kevent *ev) {
   abort();
 }
 
-
 void uv__io_poll(uv_loop_t* loop, int timeout) {
   uv__loop_internal_fields_t* lfields;
-  struct kevent events[1024];
-  struct kevent* ev;
+  struct kevent64_s events[1024];
+  struct kevent64_s* ev;
   struct timespec spec;
   unsigned int nevents;
   unsigned int revents;
@@ -211,30 +210,30 @@ void uv__io_poll(uv_loop_t* loop, int timeout) {
         op = EV_ADD | EV_ONESHOT; /* Stop the event from firing repeatedly. */
       }
 
-      EV_SET(events + nevents, w->fd, filter, op, fflags, 0, 0);
+      EV_SET64(events + nevents, w->fd, filter, op, fflags, 0, 0, 0, 0);
 
       if (++nevents == ARRAY_SIZE(events)) {
-        if (kevent(loop->backend_fd, events, nevents, NULL, 0, NULL))
+        if (kevent64(loop->backend_fd, events, nevents, NULL, 0, 0, NULL))
           abort();
         nevents = 0;
       }
     }
 
     if ((w->events & POLLOUT) == 0 && (w->pevents & POLLOUT) != 0) {
-      EV_SET(events + nevents, w->fd, EVFILT_WRITE, EV_ADD, 0, 0, 0);
+      EV_SET64(events + nevents, w->fd, EVFILT_WRITE, EV_ADD, 0, 0, 0, 0, 0);
 
       if (++nevents == ARRAY_SIZE(events)) {
-        if (kevent(loop->backend_fd, events, nevents, NULL, 0, NULL))
+        if (kevent64(loop->backend_fd, events, nevents, NULL, 0, 0, NULL))
           abort();
         nevents = 0;
       }
     }
 
    if ((w->events & UV__POLLPRI) == 0 && (w->pevents & UV__POLLPRI) != 0) {
-      EV_SET(events + nevents, w->fd, EV_OOBAND, EV_ADD, 0, 0, 0);
+      EV_SET64(events + nevents, w->fd, EV_OOBAND, EV_ADD, 0, 0, 0, 0, 0);
 
       if (++nevents == ARRAY_SIZE(events)) {
-        if (kevent(loop->backend_fd, events, nevents, NULL, 0, NULL))
+        if (kevent64(loop->backend_fd, events, nevents, NULL, 0, 0, NULL))
           abort();
         nevents = 0;
       }
@@ -283,11 +282,15 @@ void uv__io_poll(uv_loop_t* loop, int timeout) {
      */
     lfields->current_timeout = timeout;
 
-    nfds = kevent(loop->backend_fd,
+    unsigned int flags = timeout == 0 && spec.tv_nsec == 0 && spec.tv_sec == 0 
+      ? KEVENT_FLAG_IMMEDIATE : KEVENT_FLAG_NONE;
+
+    nfds = kevent64(loop->backend_fd,
                   events,
                   nevents,
                   events,
                   ARRAY_SIZE(events),
+                  flags,
                   timeout == -1 ? NULL : &spec);
 
     if (nfds == -1)
@@ -477,14 +480,14 @@ update_timeout:
 
 
 void uv__platform_invalidate_fd(uv_loop_t* loop, int fd) {
-  struct kevent* events;
+  struct kevent64_s* events;
   uintptr_t i;
   uintptr_t nfds;
 
   assert(loop->watchers != NULL);
   assert(fd >= 0);
 
-  events = (struct kevent*) loop->watchers[loop->nwatchers];
+  events = (struct kevent64_s*) loop->watchers[loop->nwatchers];
   nfds = (uintptr_t) loop->watchers[loop->nwatchers + 1];
   if (events == NULL)
     return;
@@ -498,7 +501,7 @@ void uv__platform_invalidate_fd(uv_loop_t* loop, int fd) {
 
 static void uv__fs_event(uv_loop_t* loop, uv__io_t* w, unsigned int fflags) {
   uv_fs_event_t* handle;
-  struct kevent ev;
+  struct kevent64_s ev;
   int events;
   const char* path;
 #if defined(F_GETPATH)
@@ -551,9 +554,9 @@ static void uv__fs_event(uv_loop_t* loop, uv__io_t* w, unsigned int fflags) {
   fflags = NOTE_ATTRIB | NOTE_WRITE  | NOTE_RENAME
          | NOTE_DELETE | NOTE_EXTEND | NOTE_REVOKE;
 
-  EV_SET(&ev, w->fd, EVFILT_VNODE, EV_ADD | EV_ONESHOT, fflags, 0, 0);
+  EV_SET64(&ev, w->fd, EVFILT_VNODE, EV_ADD | EV_ONESHOT, fflags, 0, 0, 0, 0);
 
-  if (kevent(loop->backend_fd, &ev, 1, NULL, 0, NULL))
+  if (kevent64(loop->backend_fd, &ev, 1, NULL, 0, 0, NULL))
     abort();
 }
 
